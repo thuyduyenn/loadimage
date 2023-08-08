@@ -10,7 +10,7 @@ export const ChatContextProvider = ({children}) => {
     const [allPotiental,setAllPotiental] = useState(null)
     const [errorGetPotiental,setErrorGetPotiental] = useState(null)
     const [currentChat,setCurrentChat]  = useState(null)
-    const {user,responsiveChat,setResponseChat} = useContext(AuthContext)
+    const {user,allUser,setResponseChat} = useContext(AuthContext)
     const [socket,setSocket] = useState(null)
     const [onlineUsers,setOnlineUsers] = useState(null)
     const [errorAddListF,setErrorAddListF] = useState(null)
@@ -34,6 +34,10 @@ export const ChatContextProvider = ({children}) => {
     const thisUserNotifications = unreadNotifications?.filter(
          n => n.sender === recipientUser?._id
     )
+    const [textFriend,setTextFriend] = useState({
+     text:""
+    })
+
     // socket starts
     //initial socket
 
@@ -166,7 +170,7 @@ export const ChatContextProvider = ({children}) => {
      
       useEffect(()=> {
         const getChats = async() =>{
-          if(user?._id){
+          if(user?._id && textFriend?.text === ""){
             const userId = localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user"))._id : "null" 
        
             const listFriendRes = await getRequest(`${baseUrl}/chats/${user?._id}`)
@@ -182,7 +186,7 @@ export const ChatContextProvider = ({children}) => {
         }
         getChats()
    
-      },[user,newChat,allListFriendFilter])
+      },[user,newChat,allListFriendFilter,textFriend])
   
 
     //handle list Friend end
@@ -297,7 +301,7 @@ const markNotificationAsRead = useCallback((n,allListFriendFilter,user,notificat
      const desiredChat = allListFriendFilter.find(chat => {
           const chatMembers = [user?._id,n.senderId]
           const isDesiredChat = chat?.members.every((member)=> {
-            return chatMembers.includes(member)
+                return chatMembers.includes(member)
           })
           return  isDesiredChat
      })
@@ -336,7 +340,118 @@ useEffect(()=> {
      getAllMessages()
 },[newMessage,notifications])
 
+const [searchFriend,setSearchFriend] = useState(true)
 
+const changeSearch = useCallback((e)=> {
+       e.preventDefault()
+       setSearchFriend(!searchFriend)
+})
+const searchFriendText =  useCallback((info) => {
+     setTextFriend(info)
+     if(info?.text !== ""){
+          const text = info?.text
+          const textFilter = convertText(text.trim().toLowerCase())
+
+          
+          const res = allListFriendFilter?.map((item)=> {            
+                 const recipientId = item.members.find(id => id !== user?._id) 
+                 const data = allUser?.find(id => id._id === recipientId)  
+                 const name = data?.name
+                 const nameLower = convertText(name.trim().toLowerCase())
+                 const email = data?.email
+                 const emailLower = convertText(email.trim().toLowerCase())
+                 const userValid = nameLower.includes(textFilter) || emailLower.includes(textFilter)
+                 if(userValid === true){
+                     return item
+                 }else {
+                    return  null
+                 }
+                  
+
+                
+          })
+          const data  = []
+          res?.map((item)=> {
+                 
+                if(item) {
+                       data.push({
+                          ...item
+                       }) 
+                }
+          })
+          setAllListFriendFilter(data)
+   }       
+})
+const convertText = (str)=> {
+     str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g,"a"); 
+     str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g,"e"); 
+     str = str.replace(/ì|í|ị|ỉ|ĩ/g,"i"); 
+     str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g,"o"); 
+     str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g,"u"); 
+     str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g,"y"); 
+     str = str.replace(/đ/g,"d");
+     str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+     str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+     str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
+     str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+     str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+     str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
+     str = str.replace(/Đ/g, "D");
+     // Some system encode vietnamese combining accent as individual utf-8 characters
+     // Một vài bộ encode coi các dấu mũ, dấu chữ như một kí tự riêng biệt nên thêm hai dòng này
+     str = str.replace(/\u0300|\u0301|\u0303|\u0309|\u0323/g, ""); // ̀ ́ ̃ ̉ ̣  huyền, sắc, ngã, hỏi, nặng
+     str = str.replace(/\u02C6|\u0306|\u031B/g, ""); // ˆ ̆ ̛  Â, Ê, Ă, Ơ, Ư
+     // Remove extra spaces
+     // Bỏ các khoảng trắng liền nhau
+     str = str.replace(/ + /g," ");
+     str = str.trim();
+     // Remove punctuations
+     // Bỏ dấu câu, kí tự đặc biệt
+     str = str.replace(/!|@|%|\^|\*|\(|\)|\+|\=|\<|\>|\?|\/|,|\.|\:|\;|\'|\"|\&|\#|\[|\]|~|\$|_|`|-|{|}|\||\\/g," ");
+ 
+     return str
+}
+const handleFriend = useCallback((e)=> {
+         e.preventDefault()
+         if(textFriend?.text !== ""){
+              const text = textFriend?.text
+              const textFilter = convertText(text.trim().toLowerCase())
+  
+              
+              const res = allListFriendFilter?.map((item)=> {            
+                     const recipientId = item.members.find(id => id !== user?._id) 
+                    
+                     const data = allUser?.find(id => id._id === recipientId)  
+                     const name = data?.name
+                     const nameLower = convertText(name.trim().toLowerCase())
+                     const email = data?.email
+                     const emailLower = convertText(email.trim().toLowerCase())
+                     const userValid = nameLower.includes(textFilter) || emailLower.includes(textFilter)
+                     if(userValid === true){
+                         return item
+                     }else {
+                        return  null
+                     }
+                      
+
+                    
+              })
+              const data  = []
+              res?.map((item)=> {
+                     
+                    if(item) {
+                           data.push({
+                              ...item
+                           }) 
+                    }
+              })
+              setAllListFriendFilter(data)
+              
+         
+         }
+
+
+},[allListFriendFilter,textFriend,allUser])
 
     return (
         <ChatContext.Provider value={
@@ -373,7 +488,18 @@ useEffect(()=> {
 
                 allMessages,
                 allMessagesError,
-                onlineUsers
+                onlineUsers,
+
+
+                searchFriend,
+                setSearchFriend,
+                changeSearch,
+                textFriend,
+                searchFriendText,
+                handleFriend,
+           
+
+
 
 
 
